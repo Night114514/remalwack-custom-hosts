@@ -20,7 +20,11 @@ The builder:
 - accepts only `0.0.0.0` / `127.0.0.1` host entries from AWAvenue;
 - rejects ABP syntax, URLs, wildcards, IP literals, localhost names and malformed hostnames;
 - lowercases, sorts and de-duplicates all domains globally;
-- fails the build if any configured upstream unexpectedly produces zero valid domains.
+- retries transient download failures up to three times, waiting 1, 3 and 9 seconds;
+- rejects an update if anti-AD has fewer than 50,000 valid domains, AdRules fewer than 100,000, or AWAvenue fewer than 300;
+- preserves the current `hosts.txt` if the new merged total is more than 25% smaller.
+
+All safety checks run before the output file is written, so a failed update leaves the last known-good list unchanged.
 
 ## Re-Malwack subscription
 
