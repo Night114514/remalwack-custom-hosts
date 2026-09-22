@@ -6,6 +6,7 @@ import ipaddress
 import json
 import re
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -13,6 +14,8 @@ USER_AGENT = "remalwack-custom-hosts/1.0 (+GitHub Actions)"
 BLOCK_IPS = {"0.0.0.0", "127.0.0.1"}
 LOCAL_NAMES = {"localhost", "localhost.localdomain", "broadcasthost", "ip6-localhost", "ip6-loopback"}
 LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
+RETRY_DELAYS = (1, 3, 9)
+MAX_TOTAL_DROP_PERCENT = 25
 
 
 def normalize_domain(value: str) -> str | None:
@@ -43,7 +46,6 @@ def extract_domains(text: str, mode: str) -> set[str]:
             continue
 
         if mode == "domains":
-            # Strict by design: one bare domain per line only.
             if any(c.isspace() for c in line):
                 continue
             domain = normalize_domain(line)
@@ -51,7 +53,6 @@ def extract_domains(text: str, mode: str) -> set[str]:
                 result.add(domain)
             continue
 
-        # Standard Linux/Windows hosts syntax. Strip inline comments first.
         line = line.split("#", 1)[0].strip()
         if not line:
             continue
@@ -72,20 +73,30 @@ def render_hosts(domains: set[str]) -> str:
 
 def download_text(url: str, timeout: int = 45) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        charset = response.headers.get_content_charset() or "utf-8"
-        return response.read().decode(charset, errors="strict")
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                return response.read().decode(charset, errors="strict")
+        except OSError:
+            if attempt == len(RETRY_DELAYS):
+                raise
+            time.sleep(RETRY_DELAYS[attempt])
+
+    raise AssertionError("unreachable")
 
 
-def load_sources(path: Path) -> list[dict[str, str]]:
+def load_sources(path: Path) -> list[dict[str, str | int]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, list) or not data:
         raise ValueError("sources.json must contain a non-empty JSON array")
     for item in data:
-        if not isinstance(item, dict) or not {"name", "url", "mode"} <= item.keys():
-            raise ValueError("Each source requires name, url and mode")
+        if not isinstance(item, dict) or not {"name", "url", "mode", "min_domains"} <= item.keys():
+            raise ValueError("Each source requires name, url, mode and min_domains")
         if item["mode"] not in {"domains", "hosts"}:
             raise ValueError(f"Unsupported mode for {item['name']}: {item['mode']}")
+        if not isinstance(item["min_domains"], int) or isinstance(item["min_domains"], bool) or item["min_domains"] < 1:
+            raise ValueError(f"min_domains for {item['name']} must be a positive integer")
     return data
 
 
@@ -95,12 +106,27 @@ def build(sources_path: Path, output_path: Path) -> tuple[int, list[tuple[str, i
     stats: list[tuple[str, int]] = []
 
     for source in sources:
-        text = download_text(source["url"])
-        domains = extract_domains(text, source["mode"])
-        if not domains:
-            raise RuntimeError(f"Source produced zero valid domains: {source['name']}")
+        text = download_text(str(source["url"]))
+        domains = extract_domains(text, str(source["mode"]))
+        minimum = int(source["min_domains"])
+        if len(domains) < minimum:
+            raise RuntimeError(
+                f"Source {source['name']} produced {len(domains):,} valid domains; "
+                f"minimum is {minimum:,}"
+            )
         stats.append((source["name"], len(domains)))
         merged.update(domains)
+
+    if output_path.exists():
+        previous_total = len(extract_domains(output_path.read_text(encoding="utf-8"), "hosts"))
+        current_total = len(merged)
+        if previous_total and current_total * 100 < previous_total * (100 - MAX_TOTAL_DROP_PERCENT):
+            decrease = (previous_total - current_total) / previous_total * 100
+            raise RuntimeError(
+                f"Merged domain count decreased by {decrease:.1f}% "
+                f"({previous_total:,} -> {current_total:,}), exceeding "
+                f"{MAX_TOTAL_DROP_PERCENT}% safety limit"
+            )
 
     header = [
         "# Re-Malwack custom hosts",
