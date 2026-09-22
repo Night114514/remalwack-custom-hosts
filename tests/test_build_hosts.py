@@ -54,9 +54,14 @@ xn--fiqs8s.example
 
 
 class RenderHostsTests(unittest.TestCase):
+    def test_dual_stack_round_trip_counts_each_domain_once(self):
+        domains = {"a.example", "b.example"}
+        self.assertEqual(extract_domains(render_hosts(domains), "hosts"), domains)
+        self.assertEqual(extract_domains(":: ipv6.example\n", "hosts"), {"ipv6.example"})
+
     def test_render_hosts_deduplicates_and_sorts(self):
         result = render_hosts({"b.example", "a.example", "b.example"})
-        self.assertEqual(result, "0.0.0.0 a.example\n0.0.0.0 b.example\n")
+        self.assertEqual(result, "0.0.0.0 a.example\n:: a.example\n0.0.0.0 b.example\n:: b.example\n")
 
 
 class DownloadTests(unittest.TestCase):

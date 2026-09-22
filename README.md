@@ -12,12 +12,15 @@ A strict `hosts` list built for [Re-Malwack](https://github.com/ZG089/Re-Malwack
 
 ```text
 0.0.0.0 example.com
+:: example.com
 ```
+
+Each domain has one IPv4 and one IPv6 blocking entry. Counts and safety thresholds refer to unique domains, not output lines. Re-Malwack must preserve IPv6 entries when importing the source for them to take effect.
 
 The builder:
 
 - accepts only bare domains from anti-AD and AdRules DNS output;
-- accepts only `0.0.0.0` / `127.0.0.1` host entries from AWAvenue;
+- accepts only `0.0.0.0` / `127.0.0.1` / `::` host entries from AWAvenue;
 - rejects ABP syntax, URLs, wildcards, IP literals, localhost names and malformed hostnames;
 - lowercases, sorts and de-duplicates all domains globally;
 - retries transient download failures up to three times, waiting 1, 3 and 9 seconds;

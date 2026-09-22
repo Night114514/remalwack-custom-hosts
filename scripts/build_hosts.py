@@ -11,7 +11,7 @@ import urllib.request
 from pathlib import Path
 
 USER_AGENT = "remalwack-custom-hosts/1.0 (+GitHub Actions)"
-BLOCK_IPS = {"0.0.0.0", "127.0.0.1"}
+BLOCK_IPS = {"0.0.0.0", "127.0.0.1", "::"}
 LOCAL_NAMES = {"localhost", "localhost.localdomain", "broadcasthost", "ip6-localhost", "ip6-loopback"}
 LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
 RETRY_DELAYS = (1, 3, 9)
@@ -68,7 +68,7 @@ def extract_domains(text: str, mode: str) -> set[str]:
 
 
 def render_hosts(domains: set[str]) -> str:
-    return "".join(f"0.0.0.0 {domain}\n" for domain in sorted(domains))
+    return "".join(f"0.0.0.0 {domain}\n:: {domain}\n" for domain in sorted(domains))
 
 
 def download_text(url: str, timeout: int = 45) -> str:
@@ -136,7 +136,7 @@ def build(sources_path: Path, output_path: Path) -> tuple[int, list[tuple[str, i
         header.append(f"# - {source['name']}: {source['url']}")
     header.extend([
         "#",
-        "# Format: 0.0.0.0 domain",
+        "# Format: 0.0.0.0 domain + :: domain (IPv4 and IPv6)",
         "# Duplicate domains are removed and output is sorted.",
         "",
     ])
