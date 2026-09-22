@@ -2,16 +2,19 @@
   {
     "name": "privacy-protection-tools/anti-AD",
     "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt",
-    "mode": "domains"
+    "mode": "domains",
+    "min_domains": 50000
   },
   {
     "name": "Cats-Team/AdRules (DNS domains)",
     "url": "https://raw.githubusercontent.com/Cats-Team/AdRules/main/domain.txt",
-    "mode": "domains"
+    "mode": "domains",
+    "min_domains": 100000
   },
   {
     "name": "TG-Twilight/AWAvenue-Ads-Rule",
     "url": "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-hosts.txt",
-    "mode": "hosts"
+    "mode": "hosts",
+    "min_domains": 300
   }
 ]
