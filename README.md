@@ -24,21 +24,17 @@ The builder:
 
 ## Re-Malwack subscription
 
-After you create your GitHub repository and push these files, use this URL as the custom hosts source:
+Use this URL directly as the Re-Malwack custom hosts source:
 
 ```text
-https://raw.githubusercontent.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPO_NAME>/main/hosts.txt
-```
-
-For example, if the repository is `username/remalwack-custom-hosts`:
-
-```text
-https://raw.githubusercontent.com/username/remalwack-custom-hosts/main/hosts.txt
+https://raw.githubusercontent.com/Night114514/remalwack-custom-hosts/main/hosts.txt
 ```
 
 ## Automatic updates
 
-GitHub Actions runs automatically after the initial push of the project files, then every day at **02:15 UTC / 10:15 Hong Kong time (UTC+8)**. It can also be run manually from **Actions → Update hosts → Run workflow**.
+GitHub Actions runs every day at **16:00 UTC / 00:00 Hong Kong time (UTC+8)**. It can also be run manually from **Actions → Update hosts → Run workflow**.
+
+> GitHub scheduled workflows may occasionally start a few minutes later than the cron time during periods of high load; the configured schedule itself is exactly 00:00 Hong Kong time.
 
 The first successful run creates `hosts.txt`. If the generated list has not changed on later runs, the workflow does not create a commit.
 
