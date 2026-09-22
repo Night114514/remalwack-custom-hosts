@@ -1,0 +1,17 @@
+[
+  {
+    "name": "privacy-protection-tools/anti-AD",
+    "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt",
+    "mode": "domains"
+  },
+  {
+    "name": "Cats-Team/AdRules (DNS domains)",
+    "url": "https://raw.githubusercontent.com/Cats-Team/AdRules/main/domain.txt",
+    "mode": "domains"
+  },
+  {
+    "name": "TG-Twilight/AWAvenue-Ads-Rule",
+    "url": "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-hosts.txt",
+    "mode": "hosts"
+  }
+]
