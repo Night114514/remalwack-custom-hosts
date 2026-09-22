@@ -1,10 +1,11 @@
 import json
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from scripts.build_hosts import build, extract_domains, render_hosts
+from scripts.build_hosts import build, download_text, extract_domains, render_hosts
 
 
 class ExtractDomainsTests(unittest.TestCase):
@@ -20,10 +21,7 @@ https://bad.example/path
 localhost
 127.0.0.1 local.example
 """
-        self.assertEqual(
-            extract_domains(text, "domains"),
-            {"example.com", "ads.example.com"},
-        )
+        self.assertEqual(extract_domains(text, "domains"), {"example.com", "ads.example.com"})
 
     def test_hosts_mode_extracts_host_entries_and_normalizes(self):
         text = """
@@ -52,28 +50,46 @@ foo..bar
 example
 xn--fiqs8s.example
 """
-        self.assertEqual(
-            extract_domains(text, "domains"),
-            {"xn--fiqs8s.example"},
-        )
+        self.assertEqual(extract_domains(text, "domains"), {"xn--fiqs8s.example"})
 
 
 class RenderHostsTests(unittest.TestCase):
     def test_render_hosts_deduplicates_and_sorts(self):
         result = render_hosts({"b.example", "a.example", "b.example"})
-        self.assertEqual(
-            result,
-            "0.0.0.0 a.example\n0.0.0.0 b.example\n",
-        )
+        self.assertEqual(result, "0.0.0.0 a.example\n0.0.0.0 b.example\n")
+
+
+class DownloadTests(unittest.TestCase):
+    @patch("scripts.build_hosts.time.sleep")
+    @patch("scripts.build_hosts.urllib.request.urlopen")
+    def test_download_retries_three_times_before_succeeding(self, urlopen, sleep):
+        response = Mock()
+        response.headers.get_content_charset.return_value = "utf-8"
+        response.read.return_value = b"example.com\n"
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        urlopen.side_effect = [
+            urllib.error.URLError("temporary 1"),
+            urllib.error.URLError("temporary 2"),
+            urllib.error.URLError("temporary 3"),
+            response,
+        ]
+
+        self.assertEqual(download_text("https://example.test/list"), "example.com\n")
+        self.assertEqual(urlopen.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 3, 9])
 
 
 class BuildTests(unittest.TestCase):
-    def test_build_merges_three_source_modes_and_deduplicates(self):
-        sources = [
-            {"name": "anti-AD", "url": "https://example.test/a", "mode": "domains"},
-            {"name": "AdRules", "url": "https://example.test/b", "mode": "domains"},
-            {"name": "AWAvenue", "url": "https://example.test/c", "mode": "hosts"},
+    def make_sources(self):
+        return [
+            {"name": "anti-AD", "url": "https://example.test/a", "mode": "domains", "min_domains": 1},
+            {"name": "AdRules", "url": "https://example.test/b", "mode": "domains", "min_domains": 1},
+            {"name": "AWAvenue", "url": "https://example.test/c", "mode": "hosts", "min_domains": 1},
         ]
+
+    def test_build_merges_three_source_modes_and_deduplicates(self):
+        sources = self.make_sources()
         payloads = {
             "https://example.test/a": "a.example\nshared.example\n",
             "https://example.test/b": "b.example\nshared.example\n||not-a-domain.example^\n",
@@ -95,6 +111,43 @@ class BuildTests(unittest.TestCase):
             self.assertIn("0.0.0.0 b.example", body)
             self.assertIn("0.0.0.0 c.example", body)
             self.assertNotIn("not-a-domain.example", body)
+
+    def test_build_rejects_source_below_configured_minimum(self):
+        sources = self.make_sources()
+        sources[0]["min_domains"] = 3
+        payloads = {
+            "https://example.test/a": "a.example\nb.example\n",
+            "https://example.test/b": "b.example\n",
+            "https://example.test/c": "0.0.0.0 c.example\n",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source_path = root / "sources.json"
+            output_path = root / "hosts.txt"
+            source_path.write_text(json.dumps(sources), encoding="utf-8")
+            with patch("scripts.build_hosts.download_text", side_effect=lambda url: payloads[url]):
+                with self.assertRaisesRegex(RuntimeError, "anti-AD.*2.*minimum.*3"):
+                    build(source_path, output_path)
+            self.assertFalse(output_path.exists())
+
+    def test_build_preserves_existing_output_when_total_drops_more_than_25_percent(self):
+        sources = self.make_sources()
+        payloads = {
+            "https://example.test/a": "a.example\n",
+            "https://example.test/b": "b.example\n",
+            "https://example.test/c": "0.0.0.0 c.example\n",
+        }
+        existing = "".join(f"0.0.0.0 old-{index}.example\n" for index in range(5))
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source_path = root / "sources.json"
+            output_path = root / "hosts.txt"
+            source_path.write_text(json.dumps(sources), encoding="utf-8")
+            output_path.write_text(existing, encoding="utf-8")
+            with patch("scripts.build_hosts.download_text", side_effect=lambda url: payloads[url]):
+                with self.assertRaisesRegex(RuntimeError, "decreased.*40.0%.*25%"):
+                    build(source_path, output_path)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), existing)
 
 
 if __name__ == "__main__":
