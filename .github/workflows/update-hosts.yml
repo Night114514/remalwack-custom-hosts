@@ -10,24 +10,25 @@ on:
       - ".github/workflows/update-hosts.yml"
   workflow_dispatch:
   schedule:
-    - cron: "15 2 * * *" # 10:15 Hong Kong time (UTC+8)
+    - cron: "0 16 * * *" # 00:00 Hong Kong time (UTC+8)
 
 permissions:
   contents: write
 
 concurrency:
   group: update-hosts
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
